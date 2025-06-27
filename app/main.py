@@ -4,13 +4,23 @@ import redis
 from app.config import settings
 from app.db.init_db import init_db
 from app.api.routes import router as api_router
-
+from threading import Timer
+from app.services.news_processor import analyze_and_save_articles
 app = FastAPI(title=settings.app_name)
 app.include_router(api_router, prefix="/api")
 @app.on_event("startup")
 def on_startup():
     init_db()
 
+    # Start recurring news analysis every 5 minutes
+    def run_job():
+        try:
+            analyze_and_save_articles()
+        except Exception as e:
+            print(f"[Scheduler Error] {e}")
+        Timer(300, run_job).start()  # 300 seconds = 5 minutes
+
+    run_job()
 
 
 # CORS
@@ -37,3 +47,12 @@ def health_check():
         "redis": redis_status,
         "env": settings.env
     }
+
+
+
+from app.services.news_processor import analyze_and_save_articles
+
+@app.get("/analyze-news")
+def run_news_pipeline():
+    analyze_and_save_articles()
+    return {"status": "News processed and saved"}
